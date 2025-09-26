@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Acknowledgment</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-3xl bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 md:p-12">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6 text-center">Participant Consent Form</h1>
+
+        <div id="document-content" class="prose prose-lg dark:prose-invert max-w-none text-gray-700 dark:text-gray-300 space-y-4">
+            <p>
+                Please read the following terms carefully. This document constitutes a legally binding agreement between you and the organization. By proceeding, you acknowledge that you have read, understood, and agreed to be bound by all of the terms and conditions outlined herein.
+            </p>
+            <p>
+                This first paragraph contains critical information regarding the scope of the services provided. It details the limitations of liability and the extent of our obligations to you. It is imperative that you comprehend these clauses fully, as they directly impact your rights and the remedies available to you in the event of a dispute.
+            </p>
+            <p>
+                The second paragraph outlines the terms of use, including acceptable and prohibited activities. Your continued use of the service is contingent upon your adherence to these rules. Any violation may result in the immediate suspension or termination of your access without prior notice.
+            </p>
+            <p>
+                The third paragraph addresses data privacy and security. It explains what information we collect, how it is used, and the measures we take to protect it. By agreeing to these terms, you consent to our data practices as described. You also acknowledge your responsibility in maintaining the confidentiality of your account credentials.
+            </p>
+            <p>
+                Finally, the fourth and fifth paragraphs cover miscellaneous but important provisions, including the governing law, dispute resolution procedures, and the process for amending these terms. These sections ensure the orderly and predictable administration of this agreement. Your signature below confirms your acceptance of these and all other terms.
+            </p>
+        </div>
+
+        <div class="mt-10">
+            <div class="flex items-center">
+                <input id="agreement-checkbox" type="checkbox" value="" class="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
+                <label for="agreement-checkbox" class="ml-3 text-sm font-medium text-gray-900 dark:text-gray-300">I have read, understood, and agree to the terms. I am signing this document electronically.</label>
+            </div>
+        </div>
+
+        <div class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div>
+                <label for="signature" class="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-400">Signature</label>
+                <input type="text" id="signature" class="bg-gray-50 border-b-2 border-gray-300 text-gray-900 text-lg focus:ring-0 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white font-serif" placeholder="Type your full name">
+            </div>
+            <div>
+                <label class="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-400">Date and Time</label>
+                <p id="datetime-stamp" class="text-lg font-medium text-gray-900 dark:text-white border-b-2 border-gray-300 dark:border-gray-600 p-2.5 h-[46px]"></p>
+            </div>
+        </div>
+       
+        <div class="mt-10 text-center" id="submission-area">
+             <p id="status-message" class="text-sm mb-2 h-5"></p>
+            <button id="authorize_button" class="bg-blue-600 text-white font-bold py-3 px-10 rounded-lg text-lg transition-all duration-300 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300">
+                Sign in with Google to Submit
+            </button>
+            <button id="submitBtn" disabled class="bg-green-600 text-white font-bold py-3 px-10 rounded-lg text-lg transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:opacity-70 hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-300 hidden">
+                Submit Agreement
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // --- Google API Configuration ---
+        // IMPORTANT: Replace with your own API Key and Client ID from the Google Cloud Console.
+        const API_KEY = 'AIzaSyDnEqMr7CZwhg_qJA-lUFHaRixfXcr0T4E';
+        const CLIENT_ID = '289027254430-eiaa9htrf3pifp0r2akjnj56vmm32tsq.apps.googleusercontent.com';
+
+        const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
+        const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+
+        let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
+
+        // --- DOM Elements ---
+        const agreementCheckbox = document.getElementById('agreement-checkbox');
+        const signatureInput = document.getElementById('signature');
+        const submitBtn = document.getElementById('submitBtn');
+        const authorizeBtn = document.getElementById('authorize_button');
+        const datetimeStamp = document.getElementById('datetime-stamp');
+        const statusMessage = document.getElementById('status-message');
+        const documentContent = document.getElementById('document-content');
+
+        // --- Event Listeners ---
+        agreementCheckbox.addEventListener('input', checkFormState);
+        signatureInput.addEventListener('input', checkFormState);
+        authorizeBtn.addEventListener('click', () => tokenClient.requestAccessToken({prompt: 'consent'}));
+        submitBtn.addEventListener('click', createAndUploadFile);
+
+        // --- Initialization ---
+        function gapiLoaded() {
+            gapi.load('client', initializeGapiClient);
+        }
+
+        async function initializeGapiClient() {
+            await gapi.client.init({
+                apiKey: API_KEY,
+                discoveryDocs: DISCOVERY_DOCS,
+            });
+            gapiInited = true;
+            maybeEnableButtons();
+        }
+
+        function gisLoaded() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: (tokenResponse) => {
+                    // This callback is triggered after user grants consent.
+                    // The access token is now available in tokenResponse.access_token
+                    // No need to explicitly handle it here, gapi client library manages it.
+                    statusMessage.textContent = 'Signed in successfully.';
+                    statusMessage.className = 'text-sm text-green-600 dark:text-green-400 mb-2 h-5';
+                    authorizeBtn.classList.add('hidden');
+                    submitBtn.classList.remove('hidden');
+                    checkFormState();
+                },
+            });
+            gisInited = true;
+            maybeEnableButtons();
+        }
+
+        function maybeEnableButtons() {
+            if (gapiInited && gisInited) {
+                authorizeBtn.disabled = false;
+            }
+        }
+
+        // --- Core Logic ---
+        function checkFormState() {
+            const isChecked = agreementCheckbox.checked;
+            const isSigned = signatureInput.value.trim() !== '';
+           
+            // The submit button should only be enabled if authorized, checked, and signed.
+            const isSignedIn = !authorizeBtn.classList.contains('hidden');
+            if (isSignedIn && isChecked && isSigned) {
+                submitBtn.disabled = false;
+            } else {
+                submitBtn.disabled = true;
+            }
+        }
+
+        function setDateTime() {
+            const now = new Date();
+            const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' };
+            datetimeStamp.textContent = now.toLocaleDateString('en-US', options);
+        }
+       
+        async function createAndUploadFile() {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting...';
+            statusMessage.textContent = 'Saving to your Google Drive...';
+            statusMessage.className = 'text-sm text-blue-600 dark:text-blue-400 mb-2 h-5';
+
+            const signature = signatureInput.value.trim();
+            const timestamp = datetimeStamp.textContent;
+           
+            // Build the content of the file
+            let fileContent = `DOCUMENT OF AGREEMENT\n`;
+            fileContent += `========================\n\n`;
+            fileContent += `Signed By: ${signature}\n`;
+            fileContent += `Date: ${timestamp}\n\n`;
+            fileContent += `------------------------\n`;
+            fileContent += `AGREEMENT TEXT:\n`;
+            fileContent += `------------------------\n\n`;
+            fileContent += documentContent.innerText;
+
+            const boundary = '-------314159265358979323846';
+            const delimiter = `\r\n--${boundary}\r\n`;
+            const close_delim = `\r\n--${boundary}--`;
+
+            const metadata = {
+                'name': `Signed Agreement - ${signature} - ${new Date().toISOString()}.txt`,
+                'mimeType': 'text/plain'
+            };
+
+            const multipartRequestBody =
+                delimiter +
+                'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+                JSON.stringify(metadata) +
+                delimiter +
+                'Content-Type: text/plain; charset=UTF-8\r\n\r\n' +
+                fileContent +
+                close_delim;
+
+            try {
+                const request = await gapi.client.request({
+                    'path': '/upload/drive/v3/files',
+                    'method': 'POST',
+                    'params': {'uploadType': 'multipart'},
+                    'headers': {'Content-Type': `multipart/related; boundary="${boundary}"`},
+                    'body': multipartRequestBody
+                });
+               
+                statusMessage.textContent = 'Successfully saved to Google Drive!';
+                statusMessage.className = 'text-sm text-green-600 dark:text-green-400 mb-2 h-5';
+                submitBtn.textContent = 'Submitted!';
+
+            } catch (err) {
+                 console.error("Error saving to drive: ", err);
+                 statusMessage.textContent = 'Error: Could not save file. See console.';
+                 statusMessage.className = 'text-sm text-red-600 dark:text-red-400 mb-2 h-5';
+                 submitBtn.disabled = false;
+                 submitBtn.textContent = 'Submit Agreement';
+            }
+        }
+
+        // --- Initial Page Load ---
+        setDateTime();
+        checkFormState();
+        authorizeBtn.disabled = true; // Disabled until APIs load
+    </script>
+   
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+
+</body>
+</html>
